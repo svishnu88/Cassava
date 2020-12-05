@@ -5,6 +5,8 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from data import *
 from augmentations import get_augmentations
+from torch.utils.data import DataLoader
+from pytorch_lightning import _logger as log
 
 ssl_models = [
     "resnet18_ssl",
@@ -27,7 +29,7 @@ class CassavaModel(pl.LightningModule):
     def forward(self, x):
         return self.model(x)
 
-    def setup(self, stage: str):
+    def setup(self):
         df = pd.read_csv(self.data_path / "train.csv")
         train_df, valid_df = train_test_split(
             df, test_size=0.30, random_state=42, stratify=df.label
@@ -41,4 +43,23 @@ class CassavaModel(pl.LightningModule):
         )
         self.train_dataset = train_dataset
         self.valid_dataset = valid_dataset
-        return super().setup(stage)
+
+    def __dataloader(self, train):
+        """Train/validation loaders."""
+        _dataset = self.train_dataset if train else self.valid_dataset
+        loader = DataLoader(
+            dataset=_dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=True if train else False,
+        )
+
+        return loader
+
+    def train_dataloader(self):
+        log.info("Training data loaded.")
+        return self.__dataloader(train=True)
+
+    def val_dataloader(self):
+        log.info("Validation data loaded.")
+        return self.__dataloader(train=False)
