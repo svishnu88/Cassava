@@ -38,6 +38,9 @@ class Resnext(nn.Module):
 
 if __name__ == "__main__":
     model = Resnext(num_classes=5)
-    sample_input = torch.rand(size=(2, 3, 224, 224))
-    print(model(sample_input).shape)
+    sample_input = torch.rand(size=(5, 3, 224, 224))
+    sample_targets = torch.randint(0, 5, size=(5,))
+
+    output = model(sample_input)
+    print(F.cross_entropy(output, sample_targets))
 

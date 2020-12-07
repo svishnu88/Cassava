@@ -7,6 +7,9 @@ from data import *
 from augmentations import get_augmentations
 from torch.utils.data import DataLoader
 from pytorch_lightning import _logger as log
+import torch.nn.functional as F
+import torch
+from argparse import ArgumentParser
 
 ssl_models = [
     "resnet18_ssl",
@@ -29,37 +32,38 @@ class CassavaModel(pl.LightningModule):
     def forward(self, x):
         return self.model(x)
 
-    def setup(self):
-        df = pd.read_csv(self.data_path / "train.csv")
-        train_df, valid_df = train_test_split(
-            df, test_size=0.30, random_state=42, stratify=df.label
-        )
-        train_transform, test_transform = get_augmentations(p=0.5, image_size=224)
-        train_dataset = CassavaDataset(
-            self.data_path, df=train_df, transform=train_transform
-        )
-        valid_dataset = CassavaDataset(
-            self.data_path, df=valid_df, transform=test_transform
-        )
-        self.train_dataset = train_dataset
-        self.valid_dataset = valid_dataset
+    def training_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self(x)
+        loss = F.cross_entropy(y_hat, y)
+        self.log("train_loss", loss, on_epoch=True)
+        return loss
 
-    def __dataloader(self, train):
-        """Train/validation loaders."""
-        _dataset = self.train_dataset if train else self.valid_dataset
-        loader = DataLoader(
-            dataset=_dataset,
-            batch_size=self.batch_size,
-            num_workers=self.num_workers,
-            shuffle=True if train else False,
-        )
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self.backbone(x)
+        loss = F.cross_entropy(y_hat, y)
+        self.log("valid_loss", loss, on_step=True)
 
-        return loader
+    def configure_optimizers(self):
+        # self.hparams available because we called self.save_hyperparameters()
+        return torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
 
-    def train_dataloader(self):
-        log.info("Training data loaded.")
-        return self.__dataloader(train=True)
+    @staticmethod
+    def add_model_specific_args(parent_parser):
+        parser = ArgumentParser(parents=[parent_parser], add_help=False)
+        parser.add_argument("--learning_rate", type=float, default=0.0001)
+        return parser
 
-    def val_dataloader(self):
-        log.info("Validation data loaded.")
-        return self.__dataloader(train=False)
+    def cli_main():
+        pl.seed_everything(1234)
+
+        # ------------
+        # args
+        # ------------
+        parser = ArgumentParser()
+        parser.add_argument("--batch_size", default=32, type=int)
+        parser.add_argument("--hidden_dim", type=int, default=128)
+        parser = pl.Trainer.add_argparse_args(parser)
+        parser = CassavaModel.add_model_specific_args(parser)
+        args = parser.parse_args()
