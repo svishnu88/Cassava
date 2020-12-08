@@ -54,6 +54,10 @@ coverage.xml
 #Ligtning Logs
 /lightning_logs
 
+#Wandb Logs
+/wandb
+/Cassava Leaf Disease
+
 # Translations
 *.mo
 *.pot

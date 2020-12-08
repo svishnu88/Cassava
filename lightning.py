@@ -10,6 +10,7 @@ from pytorch_lightning import _logger as log
 import torch.nn.functional as F
 import torch
 from argparse import ArgumentParser
+from pytorch_lightning.loggers import WandbLogger
 
 ssl_models = [
     "resnet18_ssl",
@@ -84,6 +85,11 @@ def cli_main():
     args = parser.parse_args()
 
     # ------------
+    # Log Metrics using Wandb
+    # ------------
+
+    wandb_logger = WandbLogger(name="Initial-Pipeline", project="Cassava Leaf Disease")
+    # ------------
     # Create Data Module
     # ------------
 
@@ -113,7 +119,7 @@ def cli_main():
     # Training
     # ------------
 
-    trainer = pl.Trainer.from_argparse_args(args)
+    trainer = pl.Trainer.from_argparse_args(args, logger=wandb_logger,)
     trainer.fit(model=model, datamodule=data_module)
 
 
