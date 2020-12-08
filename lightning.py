@@ -23,11 +23,18 @@ ssl_models = [
 
 class CassavaModel(pl.LightningModule):
     def __init__(
-        self, model_name: str = None, num_classes: int = None, data_path: Path = None
+        self,
+        model_num: int = 2,
+        num_classes: int = None,
+        data_path: Path = None,
+        loss_fn=F.cross_entropy,
+        lr=1e-4,
     ):
         super().__init__()
-        self.model = Resnext(model_name=model_name, num_classes=num_classes)
+        self.model = Resnext(model_name=ssl_models[model_num], num_classes=num_classes)
         self.data_path = data_path
+        self.loss_fn = loss_fn
+        self.lr = lr
 
     def forward(self, x):
         return self.model(x)
@@ -35,35 +42,80 @@ class CassavaModel(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
-        loss = F.cross_entropy(y_hat, y)
+        loss = self.loss_fn(y_hat, y)
         self.log("train_loss", loss, on_epoch=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
-        y_hat = self.backbone(x)
-        loss = F.cross_entropy(y_hat, y)
+        y_hat = self(x)
+        loss = self.loss_fn(y_hat, y)
         self.log("valid_loss", loss, on_step=True)
 
     def configure_optimizers(self):
-        # self.hparams available because we called self.save_hyperparameters()
-        return torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
+        return torch.optim.Adam(self.parameters(), lr=self.lr)
 
     @staticmethod
     def add_model_specific_args(parent_parser):
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
-        parser.add_argument("--learning_rate", type=float, default=0.0001)
+        parser.add_argument("--model_num", default=2, type=int)
+        parser.add_argument("--num_classes", default=5, type=int)
+        parser.add_argument("--data_path", default="../data/", type=str)
+        parser.add_argument("--lr", default=0.0001, type=float)
         return parser
 
-    def cli_main():
-        pl.seed_everything(1234)
 
-        # ------------
-        # args
-        # ------------
-        parser = ArgumentParser()
-        parser.add_argument("--batch_size", default=32, type=int)
-        parser.add_argument("--hidden_dim", type=int, default=128)
-        parser = pl.Trainer.add_argparse_args(parser)
-        parser = CassavaModel.add_model_specific_args(parser)
-        args = parser.parse_args()
+def cli_main():
+    pl.seed_everything(1234)
+    # ------------
+    # args
+    # ------------
+    parser = ArgumentParser()
+    parser.add_argument("--batch_size", type=int, default=64)
+    parser.add_argument("--aug_p", type=float, default=0.5)
+    parser.add_argument("--val_pct", type=float, default=0.2)
+    parser.add_argument("--img_sz", type=int, default=224)
+    parser.add_argument("--path", type=str, default="../data/")
+    parser.add_argument("--num_workers", type=int, default=6)
+    parser.add_argument("--gpus", "--gpus", type=int, default=1)
+
+    # parser = pl.Trainer.add_argparse_args(parser)
+    parser = CassavaModel.add_model_specific_args(parser)
+    args = parser.parse_args()
+
+    # ------------
+    # Create Data Module
+    # ------------
+
+    data_module = CassavaDataModule(
+        path=args.path,
+        aug_p=args.aug_p,
+        val_pct=args.val_pct,
+        img_sz=args.img_sz,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+    )
+    data_module.prepare_data()
+    data_module.setup()
+
+    # ------------
+    # Create Model
+    # ------------
+
+    model = CassavaModel(
+        model_num=args.model_num,
+        num_classes=args.num_classes,
+        data_path=args.data_path,
+        lr=args.lr,
+    )
+
+    # ------------
+    # Training
+    # ------------
+
+    trainer = pl.Trainer.from_argparse_args(args)
+    trainer.fit(model=model, datamodule=data_module)
+
+
+if __name__ == "__main__":
+    cli_main()
