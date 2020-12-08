@@ -78,7 +78,9 @@ def cli_main():
     parser.add_argument("--img_sz", type=int, default=224)
     parser.add_argument("--path", type=str, default="../data/")
     parser.add_argument("--num_workers", type=int, default=6)
-    parser.add_argument("--gpus", "--gpus", type=int, default=1)
+    parser.add_argument("--gpus", type=int, default=1)
+    parser.add_argument("--max_epochs", type=int, default=2)
+    # parser.add_argument("--precision", type=int, default=16)
 
     # parser = pl.Trainer.add_argparse_args(parser)
     parser = CassavaModel.add_model_specific_args(parser)
@@ -119,9 +121,24 @@ def cli_main():
     # Training
     # ------------
 
-    trainer = pl.Trainer.from_argparse_args(args, logger=wandb_logger,)
+    # trainer = pl.Trainer.from_argparse_args(
+    #     args, logger=wandb_logger, limit_train_batches=0.1, precision=16,
+    # )
+
+    trainer = pl.Trainer(
+        logger=wandb_logger,
+        gpus=-1,
+        max_epochs=1,
+        limit_train_batches=0.1,
+        precision=16,
+    )
     trainer.fit(model=model, datamodule=data_module)
 
 
 if __name__ == "__main__":
     cli_main()
+
+
+# 04:47<00:03
+
+# 03:43
