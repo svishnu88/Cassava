@@ -12,6 +12,7 @@ import torch
 from argparse import ArgumentParser
 from pytorch_lightning.loggers import WandbLogger
 
+
 ssl_models = [
     "resnet18_ssl",
     "resnet50_ssl",
@@ -36,6 +37,7 @@ class CassavaModel(pl.LightningModule):
         self.data_path = data_path
         self.loss_fn = loss_fn
         self.lr = lr
+        self.accuracy = pl.metrics.Accuracy()
 
     def forward(self, x):
         return self.model(x)
@@ -44,14 +46,15 @@ class CassavaModel(pl.LightningModule):
         x, y = batch
         y_hat = self(x)
         loss = self.loss_fn(y_hat, y)
-        self.log("train_loss", loss, on_epoch=True)
+        self.log("train_loss", loss, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
         loss = self.loss_fn(y_hat, y)
-        self.log("valid_loss", loss, on_step=True)
+        self.log("valid_loss", loss, prog_bar=True)
+        self.log("val_acc", self.accuracy(y_hat, y), prog_bar=True)
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.lr)
@@ -128,8 +131,8 @@ def cli_main():
     trainer = pl.Trainer(
         logger=wandb_logger,
         gpus=-1,
-        max_epochs=1,
-        limit_train_batches=0.1,
+        max_epochs=5,
+        # limit_train_batches=0.1,
         precision=16,
     )
     trainer.fit(model=model, datamodule=data_module)
@@ -138,7 +141,3 @@ def cli_main():
 if __name__ == "__main__":
     cli_main()
 
-
-# 04:47<00:03
-
-# 03:43
