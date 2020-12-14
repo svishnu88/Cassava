@@ -31,11 +31,13 @@ class Resnext(nn.Module):
     ):
         super().__init__()
         self.pool_type = pool_type
-        backbone = torch.hub.load(
-            "facebookresearch/semi-supervised-ImageNet1K-models", model_name
-        )
+
         if kaggle:
             backbone = eval(model_name)()
+        else:
+            backbone = torch.hub.load(
+                "facebookresearch/semi-supervised-ImageNet1K-models", model_name
+            )
         list(backbone.children())[:-2]
         self.backbone = nn.Sequential(*list(backbone.children())[:-2])
         in_features = getattr(backbone, "fc").in_features
