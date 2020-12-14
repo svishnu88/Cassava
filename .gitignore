@@ -57,6 +57,11 @@ coverage.xml
 #Wandb Logs
 /wandb
 /Cassava Leaf Disease
+/Cassava
+
+#model weights
+*.pth
+*.csv
 
 # Translations
 *.mo
