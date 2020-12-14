@@ -31,6 +31,7 @@ class CassavaModel(pl.LightningModule):
         data_path: Path = None,
         loss_fn=F.cross_entropy,
         lr=1e-4,
+        wd=1e-6,
     ):
         super().__init__()
         self.model = Resnext(model_name=ssl_models[model_num], num_classes=num_classes)
@@ -38,6 +39,7 @@ class CassavaModel(pl.LightningModule):
         self.loss_fn = loss_fn
         self.lr = lr
         self.accuracy = pl.metrics.Accuracy()
+        self.wd = wd
 
     def forward(self, x):
         return self.model(x)
@@ -57,7 +59,7 @@ class CassavaModel(pl.LightningModule):
         self.log("val_acc", self.accuracy(y_hat, y), prog_bar=True)
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.lr)
+        return torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.wd)
 
     @staticmethod
     def add_model_specific_args(parent_parser):
@@ -66,6 +68,8 @@ class CassavaModel(pl.LightningModule):
         parser.add_argument("--num_classes", default=5, type=int)
         parser.add_argument("--data_path", default="../data/", type=str)
         parser.add_argument("--lr", default=0.0001, type=float)
+        parser.add_argument("--wd", default=1e-6, type=float)
+
         return parser
 
 
@@ -129,9 +133,10 @@ def cli_main():
     # )
 
     trainer = pl.Trainer(
+        accelerator="ddp",
         logger=wandb_logger,
         gpus=-1,
-        max_epochs=5,
+        max_epochs=args.max_epochs,
         # limit_train_batches=0.1,
         precision=16,
     )
@@ -140,4 +145,6 @@ def cli_main():
 
 if __name__ == "__main__":
     cli_main()
+
+# python lightning.py --batch_size=64 --num_workers=14 --img_sz=512 --max_epochs=10
 
