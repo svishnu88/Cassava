@@ -84,6 +84,7 @@ class CassavaDataModule(LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             shuffle=True,
+            pin_memory=True,
         )
 
     def val_dataloader(self):
@@ -95,6 +96,7 @@ class CassavaDataModule(LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             shuffle=False,
+            pin_memory=True,
         )
 
 
@@ -109,4 +111,3 @@ if __name__ == "__main__":
     xb, yb = next(iter(data.train_dataloader()))
     print(xb.shape)
     print(yb.shape)
-

@@ -97,7 +97,7 @@ def cli_main():
     # Log Metrics using Wandb
     # ------------
 
-    wandb_logger = WandbLogger(name="Initial-Pipeline", project="Cassava Leaf Disease")
+    wandb_logger = WandbLogger(name="Initial-Pipeline", project="Cassava")
     # ------------
     # Create Data Module
     # ------------
@@ -146,5 +146,4 @@ def cli_main():
 if __name__ == "__main__":
     cli_main()
 
-# python lightning.py --batch_size=64 --num_workers=14 --img_sz=512 --max_epochs=10
-
+# python lightning.py --batch_size=64 --num_workers=42 --img_sz=512 --max_epochs=5
