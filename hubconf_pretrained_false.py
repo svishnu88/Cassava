@@ -37,7 +37,8 @@ semi_weakly_supervised_model_urls = {
 
 
 def _resnext(url, block, layers, pretrained, progress, **kwargs):
-    model = ResNet(block, layers, pretrained=False, **kwargs)
+    print("HI")
+    model = ResNet(block, layers, **kwargs)
     # state_dict = load_state_dict_from_url(url, progress=progress)
     # model.load_state_dict(state_dict)
     return model
@@ -86,7 +87,7 @@ def resnext50_32x4d_ssl(progress=True, **kwargs):
         semi_supervised_model_urls["resnext50_32x4d"],
         Bottleneck,
         [3, 4, 6, 3],
-        True,
+        False,
         progress,
         **kwargs
     )
