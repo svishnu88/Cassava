@@ -1,6 +1,6 @@
 import pytorch_lightning as pl
 from pytorch_lightning import callbacks
-from models import Resnext
+from models import Resnext, get_efficientnet
 from pathlib import Path
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -13,10 +13,11 @@ import torch
 from argparse import ArgumentParser
 from pytorch_lightning.loggers import WandbLogger
 from losses import FocalLoss
-from warmup_scheduler import GradualWarmupScheduler
+
 from torch.optim.lr_scheduler import StepLR, ExponentialLR
 from torch import optim
 from pytorch_lightning.callbacks import LearningRateMonitor
+import geffnet
 
 
 ssl_models = [
@@ -34,7 +35,7 @@ loss_fn = {"cross_entropy": F.cross_entropy, "focal_loss": FocalLoss()}
 class CassavaModel(pl.LightningModule):
     def __init__(
         self,
-        model_num: int = 2,
+        model_name: str = ssl_models[2],
         num_classes: int = None,
         data_path: Path = None,
         loss_fn=F.cross_entropy,
@@ -42,7 +43,10 @@ class CassavaModel(pl.LightningModule):
         wd=1e-6,
     ):
         super().__init__()
-        self.model = Resnext(model_name=ssl_models[model_num], num_classes=num_classes)
+        if model_name.find("resn") > 0:
+            self.model = Resnext(model_name=model_name, num_classes=num_classes)
+        elif model_name.find("effi") > 0:
+            self.model = get_efficientnet(model_name)
         self.data_path = data_path
         self.loss_fn = loss_fn
         self.lr = lr
@@ -80,7 +84,7 @@ class CassavaModel(pl.LightningModule):
     @staticmethod
     def add_model_specific_args(parent_parser):
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
-        parser.add_argument("--model_num", default=2, type=int)
+        parser.add_argument("--model_name", default=ssl_models[2], type=str)
         parser.add_argument("--num_classes", default=5, type=int)
         parser.add_argument("--data_path", default="../data/", type=str)
         parser.add_argument("--lr", default=0.0001, type=float)
@@ -135,7 +139,7 @@ def cli_main():
     # ------------
 
     model = CassavaModel(
-        model_num=args.model_num,
+        model_name=args.model_name,
         num_classes=args.num_classes,
         data_path=args.data_path,
         lr=args.lr,

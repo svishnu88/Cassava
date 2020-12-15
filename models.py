@@ -10,6 +10,7 @@ from hubconf_pretrained_false import (
     resnext101_32x8d_ssl,
     resnext101_32x16d_ssl,
 )
+import geffnet
 
 ssl_models = [
     "resnet18_ssl",
@@ -47,6 +48,12 @@ class Resnext(nn.Module):
         features = self.pool_type(self.backbone(x), 1)
         features = features.view(x.size(0), -1)
         return self.classifier(features)
+
+
+def get_efficientnet(model_name, pretrained=True, num_classes=5):
+    model = geffnet.create_model(model_name, pretrained=pretrained)
+    model.classifier = nn.Linear(model.classifier.in_features, num_classes)
+    return model
 
 
 if __name__ == "__main__":
