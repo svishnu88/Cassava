@@ -4,7 +4,7 @@ from models import Resnext, get_efficientnet
 from pathlib import Path
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from data import *
+from cassavadata import *
 from augmentations import get_augmentations
 from torch.utils.data import DataLoader
 from pytorch_lightning import _logger as log
