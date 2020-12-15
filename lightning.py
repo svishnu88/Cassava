@@ -1,4 +1,5 @@
 import pytorch_lightning as pl
+from pytorch_lightning import callbacks
 from models import Resnext
 from pathlib import Path
 import pandas as pd
@@ -11,6 +12,11 @@ import torch.nn.functional as F
 import torch
 from argparse import ArgumentParser
 from pytorch_lightning.loggers import WandbLogger
+from losses import FocalLoss
+from warmup_scheduler import GradualWarmupScheduler
+from torch.optim.lr_scheduler import StepLR, ExponentialLR
+from torch import optim
+from pytorch_lightning.callbacks import LearningRateMonitor
 
 
 ssl_models = [
@@ -21,6 +27,8 @@ ssl_models = [
     "resnext101_32x8d_ssl",
     "resnext101_32x16d_ssl",
 ]
+
+loss_fn = {"cross_entropy": F.cross_entropy, "focal_loss": FocalLoss()}
 
 
 class CassavaModel(pl.LightningModule):
@@ -59,7 +67,15 @@ class CassavaModel(pl.LightningModule):
         self.log("val_acc", self.accuracy(y_hat, y), prog_bar=True)
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.wd)
+        # optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.wd)
+        optimizer = optim.AdamW(
+            self.model.parameters(), lr=self.lr, weight_decay=self.wd
+        )
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, len(self.train_dataloader()) * self.trainer.max_epochs
+        )
+
+        return [optimizer], [scheduler]
 
     @staticmethod
     def add_model_specific_args(parent_parser):
@@ -69,6 +85,7 @@ class CassavaModel(pl.LightningModule):
         parser.add_argument("--data_path", default="../data/", type=str)
         parser.add_argument("--lr", default=0.0001, type=float)
         parser.add_argument("--wd", default=1e-6, type=float)
+        parser.add_argument("--loss_fn", default="cross_entropy", type=str)
 
         return parser
 
@@ -122,6 +139,7 @@ def cli_main():
         num_classes=args.num_classes,
         data_path=args.data_path,
         lr=args.lr,
+        loss_fn=loss_fn[args.loss_fn],
     )
 
     # ------------
@@ -131,10 +149,11 @@ def cli_main():
     # trainer = pl.Trainer.from_argparse_args(
     #     args, logger=wandb_logger, limit_train_batches=0.1, precision=16,
     # )
-
+    lr_monitor = LearningRateMonitor(logging_interval="step")
     trainer = pl.Trainer(
         accelerator="ddp",
-        logger=wandb_logger,
+        callbacks=[lr_monitor],
+        logger=[wandb_logger],
         gpus=-1,
         max_epochs=args.max_epochs,
         # limit_train_batches=0.1,
