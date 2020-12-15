@@ -29,13 +29,15 @@ ssl_models = [
     "resnext101_32x16d_ssl",
 ]
 
+eff_models = ["tf_efficientnet_b4_ns"]
+
 loss_fn = {"cross_entropy": F.cross_entropy, "focal_loss": FocalLoss()}
 
 
 class CassavaModel(pl.LightningModule):
     def __init__(
         self,
-        model_name: str = ssl_models[2],
+        model_name: str = None,
         num_classes: int = None,
         data_path: Path = None,
         loss_fn=F.cross_entropy,
@@ -43,9 +45,10 @@ class CassavaModel(pl.LightningModule):
         wd=1e-6,
     ):
         super().__init__()
-        if model_name.find("resn") > 0:
+
+        if model_name.find("res") > -1:
             self.model = Resnext(model_name=model_name, num_classes=num_classes)
-        elif model_name.find("effi") > 0:
+        elif model_name.find("effi") > -1:
             self.model = get_efficientnet(model_name)
         self.data_path = data_path
         self.loss_fn = loss_fn
@@ -108,6 +111,7 @@ def cli_main():
     parser.add_argument("--num_workers", type=int, default=6)
     parser.add_argument("--gpus", type=int, default=1)
     parser.add_argument("--max_epochs", type=int, default=2)
+    parser.add_argument("--sync_bn", type=bool, default=True)
     # parser.add_argument("--precision", type=int, default=16)
 
     # parser = pl.Trainer.add_argparse_args(parser)
@@ -162,6 +166,7 @@ def cli_main():
         max_epochs=args.max_epochs,
         # limit_train_batches=0.1,
         precision=16,
+        sync_batchnorm=args.sync_bn,
     )
     trainer.fit(model=model, datamodule=data_module)
 
