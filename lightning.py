@@ -166,7 +166,7 @@ def cli_main():
         max_epochs=args.max_epochs,
         # limit_train_batches=0.1,
         precision=16,
-        sync_batchnorm=args.sync_bn,
+        sync_batchnorm=True,
     )
     trainer.fit(model=model, datamodule=data_module)
 
