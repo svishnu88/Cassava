@@ -9,7 +9,7 @@ from augmentations import get_augmentations
 import numpy as np
 import pandas as pd
 from pytorch_lightning import LightningDataModule
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, StratifiedKFold
 import os
 
 path = Path("../data/")
@@ -49,6 +49,7 @@ class CassavaDataModule(LightningDataModule):
         img_sz: int = 224,
         batch_size: int = 64,
         num_workers: int = 4,
+        fold_id: int = 0,
     ):
         super().__init__()
         self.path = Path(path)
@@ -57,13 +58,22 @@ class CassavaDataModule(LightningDataModule):
         self.img_sz = img_sz
         self.batch_size = batch_size
         self.num_workers = num_workers
+        self.fold_id = fold_id
 
     def prepare_data(self):
         # only called on 1 GPU/TPU in distributed
         df = pd.read_csv(self.path / "train.csv")
-        train_df, valid_df = train_test_split(
-            df, test_size=self.val_pct, random_state=42, stratify=df.label
-        )
+        # Simple Split
+        # train_df, valid_df = train_test_split(
+        #     df, test_size=self.val_pct, random_state=42, stratify=df.label
+        # )
+        # StratifiedKFold
+        skf = StratifiedKFold(n_splits=5)
+        t = df.label
+        train_index, valid_index = list(skf.split(np.zeros(len(t)), t))[self.fold_id]
+        train_df = df.loc[train_index]
+        valid_df = df.loc[valid_index]
+
         train_df.to_pickle(self.path / "train_df.pkl")
         valid_df.to_pickle(self.path / "valid_df.pkl")
 

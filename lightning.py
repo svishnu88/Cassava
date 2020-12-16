@@ -111,7 +111,8 @@ def cli_main():
     parser.add_argument("--num_workers", type=int, default=6)
     parser.add_argument("--gpus", type=int, default=1)
     parser.add_argument("--max_epochs", type=int, default=2)
-    parser.add_argument("--sync_bn", type=bool, default=True)
+    parser.add_argument("--fold_id", type=int, default=0)
+
     # parser.add_argument("--precision", type=int, default=16)
 
     # parser = pl.Trainer.add_argparse_args(parser)
@@ -134,6 +135,7 @@ def cli_main():
         img_sz=args.img_sz,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
+        fold_id=args.fold_id,
     )
     data_module.prepare_data()
     data_module.setup()
@@ -158,6 +160,7 @@ def cli_main():
     #     args, logger=wandb_logger, limit_train_batches=0.1, precision=16,
     # )
     lr_monitor = LearningRateMonitor(logging_interval="step")
+    weights_path = Path(f"weights/{args.model_name}_{args.fold_id}.pth")
     trainer = pl.Trainer(
         accelerator="ddp",
         callbacks=[lr_monitor],
@@ -167,8 +170,12 @@ def cli_main():
         # limit_train_batches=0.1,
         precision=16,
         sync_batchnorm=True,
+        weights_save_path=weights_path,
     )
+
     trainer.fit(model=model, datamodule=data_module)
+
+    # torch.save(trainer.model.state_dict(), weights_path)
 
 
 if __name__ == "__main__":
