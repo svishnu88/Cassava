@@ -1,3 +1,4 @@
+from geffnet import config
 import pytorch_lightning as pl
 from pytorch_lightning import callbacks
 from models import Resnext, get_efficientnet
@@ -16,7 +17,7 @@ from losses import FocalLoss
 
 from torch.optim.lr_scheduler import StepLR, ExponentialLR
 from torch import optim
-from pytorch_lightning.callbacks import LearningRateMonitor
+from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 import geffnet
 
 
@@ -79,7 +80,7 @@ class CassavaModel(pl.LightningModule):
             self.model.parameters(), lr=self.lr, weight_decay=self.wd
         )
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, len(self.train_dataloader()) * self.trainer.max_epochs
+            optimizer, self.trainer.max_epochs, 0
         )
 
         return [optimizer], [scheduler]
@@ -124,6 +125,7 @@ def cli_main():
     # ------------
 
     wandb_logger = WandbLogger(name="Initial-Pipeline", project="Cassava")
+
     # ------------
     # Create Data Module
     # ------------
@@ -160,17 +162,27 @@ def cli_main():
     #     args, logger=wandb_logger, limit_train_batches=0.1, precision=16,
     # )
     lr_monitor = LearningRateMonitor(logging_interval="step")
-    weights_path = Path(f"weights/{args.model_name}_{args.fold_id}.pth")
+    weights_path = Path(f"weights/")
+    filename = f"{args.fold_id}"
+    checkpoint_callback = ModelCheckpoint(
+        dirpath=weights_path,
+        save_weights_only=True,
+        monitor="val_acc",
+        mode="max",
+        save_last=True,
+        filename=filename,
+    )
     trainer = pl.Trainer(
         accelerator="ddp",
-        callbacks=[lr_monitor],
+        callbacks=[lr_monitor, checkpoint_callback],
         logger=[wandb_logger],
         gpus=-1,
         max_epochs=args.max_epochs,
         # limit_train_batches=0.1,
+        gradient_clip_val=0.1,
         precision=16,
         sync_batchnorm=True,
-        weights_save_path=weights_path,
+        # weights_save_path=weights_path,
     )
 
     trainer.fit(model=model, datamodule=data_module)
