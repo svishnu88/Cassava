@@ -4,18 +4,12 @@ from pytorch_lightning import callbacks
 from models import Resnext, get_efficientnet
 from pathlib import Path
 import pandas as pd
-from sklearn.model_selection import train_test_split
 from cassavadata import *
-from augmentations import get_augmentations
-from torch.utils.data import DataLoader
-from pytorch_lightning import _logger as log
 import torch.nn.functional as F
 import torch
 from argparse import ArgumentParser
 from pytorch_lightning.loggers import WandbLogger
 from losses import FocalLoss
-
-from torch.optim.lr_scheduler import StepLR, ExponentialLR
 from torch import optim
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 import geffnet
@@ -30,7 +24,7 @@ ssl_models = [
     "resnext101_32x16d_ssl",
 ]
 
-eff_models = ["tf_efficientnet_b4_ns"]
+eff_models = ["tf_efficientnet_b3_ns,tf_efficientnet_b4_ns"]
 
 loss_fn = {"cross_entropy": F.cross_entropy, "focal_loss": FocalLoss()}
 
@@ -75,7 +69,6 @@ class CassavaModel(pl.LightningModule):
         self.log("val_acc", self.accuracy(y_hat, y), prog_bar=True)
 
     def configure_optimizers(self):
-        # optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.wd)
         optimizer = optim.AdamW(
             self.model.parameters(), lr=self.lr, weight_decay=self.wd
         )
@@ -110,13 +103,11 @@ def cli_main():
     parser.add_argument("--img_sz", type=int, default=224)
     parser.add_argument("--path", type=str, default="../data/")
     parser.add_argument("--num_workers", type=int, default=6)
-    parser.add_argument("--gpus", type=int, default=1)
+    parser.add_argument("--gpus", type=int, default=-1)
     parser.add_argument("--max_epochs", type=int, default=2)
     parser.add_argument("--fold_id", type=int, default=0)
+    parser.add_argument("--precision", type=int, default=16)
 
-    # parser.add_argument("--precision", type=int, default=16)
-
-    # parser = pl.Trainer.add_argparse_args(parser)
     parser = CassavaModel.add_model_specific_args(parser)
     args = parser.parse_args()
 
@@ -158,39 +149,29 @@ def cli_main():
     # Training
     # ------------
 
-    # trainer = pl.Trainer.from_argparse_args(
-    #     args, logger=wandb_logger, limit_train_batches=0.1, precision=16,
-    # )
     lr_monitor = LearningRateMonitor(logging_interval="step")
     weights_path = Path(f"weights/")
-    filename = f"{args.fold_id}"
     checkpoint_callback = ModelCheckpoint(
         dirpath=weights_path,
         save_weights_only=True,
         monitor="val_acc",
         mode="max",
         save_last=True,
-        filename=filename,
+        filename=f"{args.fold_id}",
     )
     trainer = pl.Trainer(
         accelerator="ddp",
         callbacks=[lr_monitor, checkpoint_callback],
         logger=[wandb_logger],
-        gpus=-1,
+        gpus=args.gpus,
         max_epochs=args.max_epochs,
-        # limit_train_batches=0.1,
         gradient_clip_val=0.1,
-        precision=16,
+        precision=args.precision,
         sync_batchnorm=True,
-        # weights_save_path=weights_path,
     )
 
     trainer.fit(model=model, datamodule=data_module)
 
-    # torch.save(trainer.model.state_dict(), weights_path)
-
 
 if __name__ == "__main__":
     cli_main()
-
-# python lightning.py --batch_size=64 --num_workers=42 --img_sz=512 --max_epochs=5
