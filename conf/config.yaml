@@ -1,0 +1,30 @@
+trainer:
+  gpus: 1
+  max_epochs: 12
+  gradient_clip_val: 0.1
+  precision: 16
+  sync_bn: True
+
+model:
+  _target_: light_hydra.CassavaModel
+  model_name: resnext50_32x4d_ssl
+  num_classes: 5
+  loss_fn: label_smoothing
+  lr: 1e-3
+  wd: 1e-5
+
+data:
+  _target_: cassavadata.CassavaDataModule
+  batch_size: 64
+  aug_p: 0.5
+  img_sz: 224
+  num_workers: 7
+  fold_id: 0
+  path: /notebooks/data/
+
+wandb:
+  _target_: pytorch_lightning.loggers.WandbLogger
+  name: ${data.fold_id}_"Hydra Multi Run "
+  project: "Cassava Hydra"
+# defaults:
+#   - hydra/launcher: joblib

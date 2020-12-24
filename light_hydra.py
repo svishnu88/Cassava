@@ -18,6 +18,10 @@ from torch.optim.lr_scheduler import OneCycleLR
 import math
 from opt_utils import add_weight_decay
 from warmup_scheduler.scheduler import GradualWarmupScheduler
+import hydra
+from hydra.utils import instantiate
+from omegaconf import DictConfig, OmegaConf
+import os
 
 
 ssl_models = [
@@ -31,7 +35,7 @@ ssl_models = [
 
 eff_models = ["tf_efficientnet_b3_ns,tf_efficientnet_b4_ns"]
 
-loss_fn = {
+loss_fns = {
     "cross_entropy": F.cross_entropy,
     "focal_loss": FocalLoss(),
     "label_smoothing": LabelSmoothingCrossEntropy(smoothing=0.3),
@@ -43,7 +47,7 @@ class CassavaModel(pl.LightningModule):
         self,
         model_name: str = None,
         num_classes: int = None,
-        loss_fn=F.cross_entropy,
+        loss_fn: str = "cross_entropy",
         lr=1e-4,
         wd=1e-6,
     ):
@@ -53,7 +57,7 @@ class CassavaModel(pl.LightningModule):
             self.model = Resnext(model_name=model_name, num_classes=num_classes)
         elif model_name.find("effi") > -1:
             self.model = get_efficientnet(model_name)
-        self.loss_fn = loss_fn
+        self.loss_fn = loss_fns[loss_fn]
         self.lr = lr
         self.accuracy = pl.metrics.Accuracy()
         self.wd = wd
@@ -85,39 +89,53 @@ class CassavaModel(pl.LightningModule):
             optimizer, self.trainer.max_epochs, 0
         )
         warmup_scheduler = GradualWarmupScheduler(
-            optimizer, multiplier=1, total_epoch=2, after_scheduler=cosine_scheduler,
+            optimizer, multiplier=4, total_epoch=2, after_scheduler=cosine_scheduler,
         )
 
         return [optimizer], [warmup_scheduler]
 
-    @staticmethod
-    def add_model_specific_args(parent_parser):
-        parser = ArgumentParser(parents=[parent_parser], add_help=False)
-        parser.add_argument("--model_name", default=ssl_models[2], type=str)
-        parser.add_argument("--num_classes", default=5, type=int)
-        parser.add_argument("--lr", default=0.0001, type=float)
-        parser.add_argument("--wd", default=1e-6, type=float)
-        parser.add_argument("--loss_fn", default="cross_entropy", type=str)
 
-        return parser
+@hydra.main(config_path="conf", config_name="config")
+def cli_hydra(cfg: DictConfig):
+    pl.seed_everything(1234)
+
+    wandb_logger = instantiate(cfg.wandb)
+    wandb_logger.log_hyperparams(cfg)
+
+    data_module = instantiate(cfg.data)
+    data_module.prepare_data()
+    data_module.setup()
+    model = instantiate(cfg.model)
+
+    lr_monitor = LearningRateMonitor(logging_interval="epoch")
+    weights_path = Path(f"weights/")
+    checkpoint_callback = ModelCheckpoint(
+        dirpath=weights_path,
+        save_weights_only=True,
+        monitor="val_acc",
+        mode="max",
+        filename=f"{cfg.data.fold_id}",
+    )
+
+    trainer = pl.Trainer(
+        # accelerator="ddp",
+        callbacks=[lr_monitor, checkpoint_callback],
+        logger=[wandb_logger],
+        gpus=cfg.trainer.gpus,
+        max_epochs=cfg.trainer.max_epochs,
+        gradient_clip_val=0.1,
+        precision=cfg.trainer.precision,
+        sync_batchnorm=cfg.trainer.sync_bn,
+    )
+
+    trainer.fit(model=model, datamodule=data_module)
 
 
 def cli_main():
-    pl.seed_everything(1234)
+
     # ------------
     # args
     # ------------
-    parser = ArgumentParser()
-    parser.add_argument("--batch_size", type=int, default=64)
-    parser.add_argument("--aug_p", type=float, default=0.5)
-    parser.add_argument("--val_pct", type=float, default=0.2)
-    parser.add_argument("--img_sz", type=int, default=224)
-    parser.add_argument("--path", type=str, default="../data/")
-    parser.add_argument("--num_workers", type=int, default=6)
-    parser.add_argument("--gpus", type=int, default=-1)
-    parser.add_argument("--max_epochs", type=int, default=2)
-    parser.add_argument("--fold_id", type=int, default=0)
-    parser.add_argument("--precision", type=int, default=16)
 
     parser = CassavaModel.add_model_specific_args(parser)
     args = parser.parse_args()
@@ -154,7 +172,6 @@ def cli_main():
         data_path=args.data_path,
         lr=args.lr,
         loss_fn=loss_fn[args.loss_fn],
-        wd=args.wd,
     )
 
     # ------------
@@ -185,4 +202,4 @@ def cli_main():
 
 
 if __name__ == "__main__":
-    cli_main()
+    cli_hydra()

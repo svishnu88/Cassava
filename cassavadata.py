@@ -51,6 +51,7 @@ class CassavaDataModule(LightningDataModule):
         num_workers: int = 4,
         fold_id: int = 0,
     ):
+
         super().__init__()
         self.path = Path(path)
         self.aug_p = aug_p
@@ -62,12 +63,7 @@ class CassavaDataModule(LightningDataModule):
 
     def prepare_data(self):
         # only called on 1 GPU/TPU in distributed
-        df = pd.read_csv(self.path / "train.csv")
-        # Simple Split
-        # train_df, valid_df = train_test_split(
-        #     df, test_size=self.val_pct, random_state=42, stratify=df.label
-        # )
-        # StratifiedKFold
+        df = pd.read_csv(str(self.path / "train.csv"))
         skf = StratifiedKFold(n_splits=5)
         t = df.label
         train_index, valid_index = list(skf.split(np.zeros(len(t)), t))[self.fold_id]
@@ -85,6 +81,8 @@ class CassavaDataModule(LightningDataModule):
         self.train_df = pd.read_pickle(self.path / "train_df.pkl")
         self.valid_df = pd.read_pickle(self.path / "valid_df.pkl")
 
+    # Set Multi Processing Context to fork based on discussion
+    # here https://github.com/facebookresearch/hydra/issues/964#issuecomment-693227279
     def train_dataloader(self):
         train_dataset = CassavaDataset(
             self.path / "train_images", df=self.train_df, transform=self.train_transform
@@ -95,6 +93,7 @@ class CassavaDataModule(LightningDataModule):
             num_workers=self.num_workers,
             shuffle=True,
             pin_memory=True,
+            # multiprocessing_context="fork",
         )
 
     def val_dataloader(self):
@@ -107,6 +106,7 @@ class CassavaDataModule(LightningDataModule):
             num_workers=self.num_workers,
             shuffle=False,
             pin_memory=True,
+            # multiprocessing_context="fork",
         )
 
 

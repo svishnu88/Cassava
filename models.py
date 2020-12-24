@@ -10,6 +10,7 @@ from hubconf_pretrained_false import (
     resnext101_32x8d_ssl,
     resnext101_32x16d_ssl,
 )
+from torchvision.ops.misc import FrozenBatchNorm2d
 import geffnet
 
 ssl_models = [
@@ -29,6 +30,7 @@ class Resnext(nn.Module):
         pool_type=F.adaptive_avg_pool2d,
         num_classes=1000,
         kaggle=False,
+        frozen_bn=True,
     ):
         super().__init__()
         self.pool_type = pool_type
@@ -37,7 +39,9 @@ class Resnext(nn.Module):
             backbone = eval(model_name)()
         else:
             backbone = torch.hub.load(
-                "facebookresearch/semi-supervised-ImageNet1K-models", model_name
+                "facebookresearch/semi-supervised-ImageNet1K-models",
+                model_name,
+                # norm_layer=FrozenBatchNorm2d,
             )
         list(backbone.children())[:-2]
         self.backbone = nn.Sequential(*list(backbone.children())[:-2])
